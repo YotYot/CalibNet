@@ -9,11 +9,11 @@ import numpy as np
 
 path = '/media/yotamg/bd0eccc9-4cd5-414c-b764-c5a7890f9785/Yotam/Stereo/Tau_left_images/left_images_no_phase/City_0254_1100_maskImg.png'
 
-aaa = np.zeros((100,100,3), dtype=np.uint8)
+aaa = np.zeros((256,256,3), dtype=np.uint8)
 aaa[:,10:20,:] = 1
 aaa[45:55, 45:55,:] = 1
 # pil_image = Image.open(path).convert('RGB')
-aaa = aaa[50-32:50+32, 50-32:50+32,:]
+# aaa = aaa[50-32:50+32, 50-32:50+32,:]
 pil_image = Image.fromarray(aaa*255).convert('RGB')
 
 
@@ -43,6 +43,8 @@ theta2[:, 0, 0] = torch.cos(angle)
 theta2[:, 0, 1] = -torch.sin(angle)
 theta2[:, 1, 0] = torch.sin(angle)
 theta2[:, 1, 1] = torch.cos(angle)
+theta2[:, 0, 2] = -0.05
+theta2[:, 1, 2] = -0.05
 
 
 # grid = F.affine_grid(theta1, img.shape)
@@ -50,7 +52,7 @@ grid2 = F.affine_grid(theta2, img.shape)
 # rot_img = F.grid_sample(img, grid)
 rot_img2 = F.grid_sample(img, grid2)
 
-pil_rotation = transforms.functional.affine(pil_image, -angle_deg, (30, 0), 1, 0)
+pil_rotation = transforms.functional.affine(pil_image, -angle_deg, (15, 15), 1, 0)
 
 plt.subplot(131)
 plt.imshow(img[0].permute(1,2,0))

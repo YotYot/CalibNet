@@ -95,7 +95,7 @@ class ConfigNet(nn.Module):
 
         # Regressor for the 3 * 2 affine matrix
         self.fc_loc = nn.Sequential(
-            nn.Linear(153760, 36),
+            nn.Linear(36000, 36),
             nn.Linear(36, 32),
             nn.ReLU(True),
             nn.Linear(32, self.stn_n_params)
@@ -129,7 +129,7 @@ class ConfigNet(nn.Module):
 
     def theta(self, x):
         xs = self.localization(x)
-        xs = xs.view(-1, 153760)
+        xs = xs.view(-1, 36000)
         theta = self.fc_loc(xs)
         # theta = torch.unsqueeze(theta,0)
         return theta

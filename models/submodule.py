@@ -89,7 +89,7 @@ class feature_extraction(nn.Module):
         self.layer3 = self._make_layer(BasicBlock, 128, 3, 1,1,1)
         self.layer4 = self._make_layer(BasicBlock, 128, 3, 1,1,2)
 
-        self.branch1 = nn.Sequential(nn.AvgPool2d((64, 64), stride=(64,64)),
+        self.branch1 = nn.Sequential(nn.AvgPool2d((32, 32), stride=(32,32)),
                                      convbn(128, 32, 1, 1, 0, 1),
                                      nn.ReLU(inplace=True))
 
