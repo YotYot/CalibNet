@@ -6,7 +6,6 @@ from torch.autograd import Variable
 N_PARAMS = {'affine': 6,
             'translation': 2,
             'rotation': 1,
-            'center_rotation': 1,
             'scale': 2,
             'shear': 2,
             'rotation_scale': 3,
@@ -34,14 +33,6 @@ def stn(x, theta, mode='affine'):
             theta1[:, 0, 1] = -torch.sin(angle)
             theta1[:, 1, 0] = torch.sin(angle)
             theta1[:, 1, 1] = torch.cos(angle)
-        elif mode == 'center_rotation':
-            angle = theta[:, 0]
-            theta1[:, 0, 0] = torch.cos(angle)
-            theta1[:, 0, 1] = -torch.sin(angle)
-            theta1[:, 1, 0] = torch.sin(angle)
-            theta1[:, 1, 1] = torch.cos(angle)
-            theta1[:, 0, 2] = -0.5 * torch.cos(angle) + 0.5 * torch.sin(angle) + 0.5
-            theta1[:, 1, 2] = -0.5 * torch.sin(angle) - 0.5 * torch.cos(angle) + 0.5
         elif mode == 'scale':
             theta1[:, 0, 0] = theta[:, 0]
             theta1[:, 1, 1] = theta[:, 1]
@@ -120,8 +111,6 @@ class ConfigNet(nn.Module):
         elif self.stn_mode == 'scale':
             self.fc_loc[3].bias.data.copy_(torch.tensor([1, 1], dtype=torch.float))
         elif self.stn_mode == 'rotation':
-            self.fc_loc[3].bias.data.copy_(torch.tensor([0], dtype=torch.float))
-        elif self.stn_mode == 'center_rotation':
             self.fc_loc[3].bias.data.copy_(torch.tensor([0], dtype=torch.float))
         elif self.stn_mode == 'rotation_scale':
             self.fc_loc[3].bias.data.copy_(torch.tensor([0, 1, 1], dtype=torch.float))

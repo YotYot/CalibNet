@@ -9,6 +9,7 @@ from sintel_io import depth_read
 import pickle
 import tqdm
 import numpy as np
+from local_utils import projective_transform
 
 pickle_dir = 'pickles'
 train_pickle_path = 'train.pickle'
@@ -29,8 +30,9 @@ def depth_loader(path):
     # return rp.readPFM(path)
     return depth_read(path)
 
+
 class myImageloader(data.Dataset):
-    def __init__(self, left_img_files, right_img_files ,label_files, angle, x_translation, y_translation, scale, img_loader=default_loader, label_loader=depth_loader,  train=True, transform=None, label_transform=None,train_patch_w=512):
+    def __init__(self, left_img_files, right_img_files ,label_files, angle, x_translation, y_translation, x_perspective=0, y_perspective=0, scale=1.0, img_loader=default_loader, label_loader=depth_loader,  train=True, transform=None, label_transform=None,train_patch_w=512):
  
         self.train = train
         self.left_img_files = left_img_files
@@ -41,10 +43,13 @@ class myImageloader(data.Dataset):
         self.transform = transform
         self.label_transform = label_transform
         self.angle = angle
-        self.x_translation = x_translation
-        self.y_translation = y_translation
+        self.x_translation = x_translation * train_patch_w
+        self.y_translation = y_translation * train_patch_w
         self.scale = scale
         self.train_patch_w = train_patch_w
+        self.theta = torch.eye(3)
+        self.theta[2, 0] = x_perspective
+        self.theta[2, 1] = y_perspective
         # self.pickle_file = os.path.join(pickle_dir, train_pickle_path) if train else os.path.join(pickle_dir, test_pickle_path)
         # if not os.path.exists(self.pickle_file):
         #     self.generate_pickle_file(left_img_files, right_img_files, label_files)
@@ -76,7 +81,7 @@ class myImageloader(data.Dataset):
             pickle.dump(arr, f)
 
 
-    def __getitem__(self, index, angle=None, rand=False):
+    def __getitem__(self, index, angle=None, rand=True, tilt=None, tip=None):
         left_img_file  = self.left_img_files[index]
         right_img_file  = self.right_img_files[index]
         label_file = self.label_files[index]
@@ -96,14 +101,23 @@ class myImageloader(data.Dataset):
             x1 = (w - tw) // 2
             y1 = (h - th) // 2
 
+        left_img = left_img.crop((x1, y1, x1 + tw, y1 + th))
+        right_img = right_img.crop((x1, y1, x1 + tw, y1 + th))
 
         if angle is not None:
             right_img = transforms.functional.affine(right_img, angle, (self.x_translation, self.y_translation), self.scale, 0)
         else:
             right_img = transforms.functional.affine(right_img, self.angle, (self.x_translation, self.y_translation), self.scale, 0)
+        if tilt is not None or tip is not None:
+            theta = torch.eye(3)
+            if tilt is not None:
+                theta[2,1] = tilt
+            if tip is not None:
+                theta[2, 0] = tip
+            right_img = projective_transform(right_img, theta)
+        else:
+            right_img = projective_transform(right_img, self.theta)
 
-        left_img = left_img.crop((x1, y1, x1 + tw, y1 + th))
-        right_img = right_img.crop((x1, y1, x1 + tw, y1 + th))
 
         if self.transform:
             left_img = self.transform(left_img)

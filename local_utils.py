@@ -9,6 +9,27 @@ import sintel_io
 from sintel_io import depth_read
 # import cv2
 import torch
+import torchvision.transforms as transforms
+import torch.nn.functional as F
+
+def projective_transform(img, theta):
+    img = transforms.ToTensor()(img)
+    img_shape = img.size()
+    tx = torch.linspace(-1, 1, img_shape[2]).unsqueeze(0).repeat(img_shape[1], 1)
+    ty = torch.linspace(-1, 1, img_shape[1]).unsqueeze(1).repeat(1, img_shape[2])
+    grid = torch.zeros((1, img_shape[1], img_shape[2], 3), dtype=torch.float32)
+    grid[0, :, :, 0] = tx
+    grid[0, :, :, 1] = ty
+    grid[0, :, :, 2] = torch.ones(img_shape[1], img_shape[2])
+    grid = torch.mm(grid.reshape(-1, 3), theta.t()).reshape(1, img_shape[1], img_shape[2], 3)
+    grid[0, :, :, 0] = grid[0, :, :, 0].clone() / grid[0, :, :, 2].clone()
+    grid[0, :, :, 1] = grid[0, :, :, 1].clone() / grid[0, :, :, 2].clone()
+    img = torch.unsqueeze(img, 0)
+    img = F.grid_sample(img, grid[:, :, :, :2])
+    img = torch.squeeze(img, 0)
+    img = transforms.ToPILImage()(img)
+    return img
+
 
 def depth2disparity(depth, device):
     imSz = torch.Tensor([depth.shape])[0]
