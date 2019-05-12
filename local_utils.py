@@ -49,7 +49,8 @@ def depth2disparity(depth, device):
     disp = ((B * f) / calc_depth) // pixel_sz
     return disp
 
-def disparity2depth(disp, device):
+def disparity2depth(disp, device=None):
+    device = device if device else disp.get_device()
     imSz = torch.Tensor([disp.shape])[0]
     f = 24.0  # focal length in mm
     sensor_w = 32.0  # Sensor width in mm
@@ -70,7 +71,7 @@ def disparity2depth(disp, device):
 def load_model(model, device, model_path):
     print("loading checkpoint from: ", model_path)
     checkpoint = torch.load(model_path, map_location=device)
-    model.load_state_dict(checkpoint['state_dict'])
+    model.load_state_dict(checkpoint['state_dict'], strict=False)
 
 def noisy(image, sigma=0.0235):
     row, col, ch = image.shape

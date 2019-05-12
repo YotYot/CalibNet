@@ -38,11 +38,11 @@ class Dfd_net(nn.Module):
         self.upsampling16 = nn.ConvTranspose2d(in_channels=num_class, out_channels=num_class, kernel_size=32,stride=16)
         self.conv9_from_pool3 = nn.Conv2d(64, num_class, kernel_size=1)
         self.upsampling8 = nn.ConvTranspose2d(in_channels=num_class, out_channels=num_class, kernel_size=16, stride=8)
-        self.conv8_reg = nn.Conv2d(16,1,1,1, bias=True)
-        self.conv8_reg.weight.data[0,:,0,0] = torch.arange(16).float()
+        self.conv9_reg = nn.Conv2d(16,1,1,1, bias=True)
+        self.conv9_reg.weight.data[0,:,0,0] = torch.arange(16).float()
         # self.conv9_reg = nn.Conv2d(num_class, 1, 1, 1, bias=False)
         # self.conv9_reg.weight.data[0, :, 0, 0] = torch.arange(num_class).float()
-        for param in self.conv8_reg.parameters():
+        for param in self.conv9_reg.parameters():
             param.requires_grad = False
         self.softmax = nn.Softmax()
         self.num_class = num_class
@@ -78,9 +78,9 @@ class Dfd_net(nn.Module):
             if self.target_mode == 'cont':
                 x = self.softmax(x)
                 conf = x
-                x = self.conv8_reg(x)
+                x = self.conv9_reg(x)
                 #TODO - Try clamp to 1-15
-                # x = torch.clamp(x, 1,15)
+                x = torch.clamp(x, 1,15)
                 x = psi_to_depth(x-5,focal_point=focal_point, D=D)
                 if self.pool:
                     x = F.avg_pool2d(x, 4)

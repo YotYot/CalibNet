@@ -138,9 +138,9 @@ class PSMNet(nn.Module):
                                           nn.Conv3d(32, 1, kernel_size=3, padding=1, stride=1, bias=False))
 
         self.last_conv = nn.Conv2d(2,1,1)
-        self.conv1 = nn.Conv2d(192,32,1)
-        self.conv2 = nn.Conv2d(32,1,1)
-        self.conv3 = nn.Conv2d(16,1,1)
+        # self.conv1 = nn.Conv2d(192,32,1)
+        # self.conv2 = nn.Conv2d(32,1,1)
+        # self.conv3 = nn.Conv2d(16,1,1)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):

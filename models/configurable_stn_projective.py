@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
+from local_utils import disparity2depth
 
 N_PARAMS = {'projective': 5,
             'affine': 6,
@@ -17,7 +18,7 @@ N_PARAMS = {'projective': 5,
 
 def projective_stn(x, theta):
     shape = x.size()
-    orig_img = x.clone() #TODO - Remove
+    # orig_img = x.clone() #TODO - Remove
     tx = torch.linspace(-1,1,shape[2]).unsqueeze(0).repeat(shape[2],1)
     ty = torch.linspace(-1,1,shape[3]).unsqueeze(1).repeat(1,shape[3])
     theta1 = Variable(torch.zeros([x.size(0), 3, 3], dtype=torch.float32, device=x.get_device()), requires_grad=True)
@@ -32,9 +33,9 @@ def projective_stn(x, theta):
     theta1[:, 2, 0] = theta[:, 1] #x_perspective
     # theta1[:, 2, 0] = 0  # x_perspective
     theta1[:, 2, 1] = theta[:, 2] #y_perspective
-    theta1[:, 0, 2] = theta[:, 3] #x_translation
-    # theta1[:, 0, 2] = 0 #x_translation
-    theta1[:, 1, 2] = theta[:, 4] #y_translation
+    # theta1[:, 0, 2] = theta[:, 3] #x_translation
+    # # theta1[:, 0, 2] = 0 #x_translation
+    # theta1[:, 1, 2] = theta[:, 4] #y_translation
     # theta1[:, 1, 2] = 0 #y_translation
     grid = Variable(torch.zeros((1,shape[2], shape[3], 3), dtype=torch.float32, device=x.get_device()), requires_grad=False)
     grid[0,:,:,0] = tx
@@ -127,7 +128,7 @@ def stn(x, theta, mode='affine'):
 
 
 class ConfigNet(nn.Module):
-    def __init__(self, stereo_model, stn_mode='projective'):
+    def __init__(self, stereo_model, stn_mode='projective', ext_disp2depth=False, right_head=False):
         super(ConfigNet, self).__init__()
         self.conv1 = nn.Conv2d(1, 10, kernel_size=5)
         self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
@@ -137,6 +138,8 @@ class ConfigNet(nn.Module):
         self.stn_mode = stn_mode
         self.stn_n_params = N_PARAMS[stn_mode]
         self.stereo_model = stereo_model
+        self.ext_disp2depth = ext_disp2depth
+        self.right_head = right_head
 
         # Spatial transformer localization-network
         self.localization = nn.Sequential(
@@ -160,7 +163,7 @@ class ConfigNet(nn.Module):
         self.fc_loc[3].weight.data.fill_(0)
         self.fc_loc[3].weight.data.zero_()
         if self.stn_mode == 'projective':
-            self.fc_loc[3].bias.data.copy_(torch.tensor([0, 0.1, 0.1, 0, 0], dtype=torch.float))
+            self.fc_loc[3].bias.data.copy_(torch.tensor([0, 0, 0, 0, 0], dtype=torch.float))
         elif self.stn_mode == 'affine':
             self.fc_loc[3].bias.data.copy_(torch.tensor([1, 0, 0, 0, 1, 0], dtype=torch.float))
         elif self.stn_mode in ['translation', 'shear']:
@@ -182,6 +185,7 @@ class ConfigNet(nn.Module):
 
     def stn(self, x):
         x,theta1 = projective_stn(x, self.theta(x))
+        # x,theta1 = stn(x, self.theta(x),mode=self.stn_mode)
         return x, theta1
 
     def theta(self, x):
@@ -194,6 +198,26 @@ class ConfigNet(nn.Module):
     def forward(self, left_img, right_img):
         # transform the input
         right_img_transformed, theta = self.stn(right_img)
-        stereo_out = self.stereo_model(left_img, right_img_transformed)
-        return stereo_out[-1],theta, right_img_transformed
+        if self.right_head:
+            if self.training:
+                _,_,stereo_out,_,_,right_stereo_out = self.stereo_model(left_img, right_img_transformed)
+            else:
+                stereo_out, right_stereo_out,_ = self.stereo_model(left_img, right_img_transformed)
+        else:
+            if self.training:
+                _,_,stereo_out = self.stereo_model(left_img, right_img_transformed)
+            else:
+                _, stereo_out = self.stereo_model(left_img, right_img_transformed)
+
+        if self.ext_disp2depth:
+            stereo_out = disparity2depth(torch.unsqueeze(stereo_out, 0))
+            stereo_out = torch.squeeze(stereo_out, 0)
+            if self.right_head:
+                right_stereo_out = disparity2depth(torch.unsqueeze(right_stereo_out, 0))
+                right_stereo_out = torch.squeeze(right_stereo_out, 0)
+
+        if self.right_head:
+            return stereo_out, theta, right_img_transformed,right_stereo_out
+        else:
+            return stereo_out, theta, right_img_transformed
 

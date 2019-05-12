@@ -47,7 +47,7 @@ import time
 from configurable_stn_projective import ConfigNet
 from stn import Net
 import math
-
+import pickle
 from PIL import Image
 
 # plt.ion()   # interactive mode
@@ -63,15 +63,14 @@ from PIL import Image
 device = torch.device('cuda:0')
 # device = torch.device('cpu')
 
-stereo_model = PSMNet(192, device=device, dfd_net=False, dfd_at_end=False,right_head=False)
+stereo_model = PSMNet(192, device=device, dfd_net=False, dfd_at_end=False,right_head=True)
 stereo_model = nn.DataParallel(stereo_model)
 stereo_model.cuda()
 # state_dict = torch.load('/home/yotamg/PycharmProjects/PSMNet/checkpoints_filtered_L_dn700_R_dn1500/checkpoint_52.tar')
-# state_dict = torch.load('/home/yotamg/PycharmProjects/PSMNet/checkpoints_filtered_L_dn1500_R_dn700/checkpoint_138.tar')
-state_dict = torch.load('/home/yotamg/PycharmProjects/PSMNet/pretrained_model_KITTI2015.tar')
-
-
-stereo_model.load_state_dict(state_dict['state_dict'], strict=False)
+# state_dict = torch.load('/home/yotamg/PycharmProjects/PSMNet/pretrained_model_KITTI2015.tar')
+# state_dict = torch.load('/home/yotamg/PycharmProjects/PSMNet/checkpoints_filtered_L_dn1500_R_dn700_right_depth/checkpoint_300.tar')
+state_dict = torch.load('/home/yotamg/PycharmProjects/PSMNet/checkpoints_filtered_predict_depth_with_right_head/checkpoint_200.tar')
+stereo_model.load_state_dict(state_dict['state_dict'], strict=True)
 stereo_model.train()
 
 
@@ -82,7 +81,10 @@ dfd_net = dfd_net.to(device)
 load_model(dfd_net, device, model_path='/home/yotamg/PycharmProjects/dfd/trained_models/Net_continuous_dn1500/checkpoint_257.pth.tar')
 
 
+
 stereo_imgs = 'L_1500_R_700'
+
+small_dataset =  False
 
 label_dir = '/media/yotamg/bd0eccc9-4cd5-414c-b764-c5a7890f9785/Yotam/Stereo/Tau_left_images/original_depth/'
 
@@ -95,9 +97,14 @@ if stereo_imgs == 'L_700_R_1500':
 if stereo_imgs == 'L_1500_R_700':
     focus_L = '1500'
     focus_R = '700'
-    right_train_dir = '/media/yotamg/bd0eccc9-4cd5-414c-b764-c5a7890f9785/Yotam/Stereo/Tau_right_images/right_images_filtered/dn700/'
-    right_test_dir = '/media/yotamg/bd0eccc9-4cd5-414c-b764-c5a7890f9785/Yotam/Stereo/Tau_right_images/right_images_filtered/dn700/val/'
-    left_dir = '/media/yotamg/bd0eccc9-4cd5-414c-b764-c5a7890f9785/Yotam/Stereo/Tau_left_images/filtered_dn1500/rgb/'
+    if small_dataset:
+        right_train_dir = '/media/yotamg/bd0eccc9-4cd5-414c-b764-c5a7890f9785/Yotam/Stereo/Tau_right_images/right_images_filtered_small/dn700/'
+        right_test_dir = '/media/yotamg/bd0eccc9-4cd5-414c-b764-c5a7890f9785/Yotam/Stereo/Tau_right_images/right_images_filtered_small/dn700/val/'
+        left_dir = '/media/yotamg/bd0eccc9-4cd5-414c-b764-c5a7890f9785/Yotam/Stereo/Tau_left_images/filtered_dn1500_small/rgb/'
+    else:
+        right_train_dir = '/media/yotamg/bd0eccc9-4cd5-414c-b764-c5a7890f9785/Yotam/Stereo/Tau_right_images/right_images_filtered/dn700/'
+        right_test_dir = '/media/yotamg/bd0eccc9-4cd5-414c-b764-c5a7890f9785/Yotam/Stereo/Tau_right_images/right_images_filtered/dn700/val/'
+        left_dir = '/media/yotamg/bd0eccc9-4cd5-414c-b764-c5a7890f9785/Yotam/Stereo/Tau_left_images/filtered_dn1500/rgb/'
 elif stereo_imgs == 'clean':
     right_train_dir = '/media/yotamg/bd0eccc9-4cd5-414c-b764-c5a7890f9785/Yotam/Stereo/Tau_right_images/right_images_clean/'
     right_test_dir = '/media/yotamg/bd0eccc9-4cd5-414c-b764-c5a7890f9785/Yotam/Stereo/Tau_right_images/right_images_clean/val/'
@@ -114,14 +121,14 @@ train_labels = [img.replace(right_train_dir, label_dir).replace('_R','').replace
 test_labels  = [img.replace(right_test_dir,  label_dir).replace('_R','').replace('_' + focus_R + '_maskImg','').replace('.png', '.dpt').replace('.tif', '.dpt') for img in right_test_filelist]
 
 
+patch_size = 256
 angle = 7
 x_translation = 0
-y_translation = 0.0 / 256
+y_translation = 5.0 / patch_size
 scale = 1.0
-x_perspective = -0.3
-y_perspective = -0.3
+x_perspective = -0.2
+y_perspective = -0.2
 
-patch_size = 256
 
 train_loader = torch.utils.data.DataLoader(myImageloader(left_img_files=left_train_filelist, right_img_files=right_train_filelist, label_files=train_labels,
                                                          angle=angle,
@@ -157,7 +164,7 @@ test_loader = torch.utils.data.DataLoader(test_db,
                                          num_workers=4)
 
 # model = Net(stereo_model=stereo_model).to(device)
-model = ConfigNet(stereo_model=stereo_model, stn_mode='projective', ext_disp2depth=True).to(device)
+model = ConfigNet(stereo_model=stereo_model, stn_mode='projective', right_head=True).to(device)
 
 ######################################################################
 # Training the model
@@ -167,7 +174,8 @@ model = ConfigNet(stereo_model=stereo_model, stn_mode='projective', ext_disp2dep
 # learning the classification task in a supervised way. In the same time
 # the model is learning STN automatically in an end-to-end fashion.
 lr = 0.001
-
+if small_dataset:
+    lr = 0.0001
 optimizer = optim.SGD(model.parameters(), lr=lr)
 # optimizer = optim.Adam(model.parameters(), lr=0.001)
 
@@ -191,17 +199,27 @@ def train(epoch):
         left, right, target = left.to(device), right.to(device), target.to(device)
 
         optimizer.zero_grad()
-        stereo_out, theta, right_transformed = model(left,right)
+        stereo_out, theta, right_transformed, stereo_out_right = model(left,right)
+        with torch.no_grad():
+            mono_out, _ = dfd_net(left, focal_point=1.5)
+            right_mono_out,_ = dfd_net(right_transformed, focal_point=0.7)
 
-        # with torch.no_grad():
-        #     mono_out, _ = dfd_net(left)
+        right_mono_out = right_mono_out[:,50:200, 50:200]
+        stereo_out_right = stereo_out_right[:,50:200, 50:200]
+
+        fuse_mask = (stereo_out_right > 0.3) & (stereo_out_right < 1.0)
+        fuse_depth = stereo_out_right.clone()
+        fuse_depth[fuse_mask] = right_mono_out[fuse_mask]
 
         mask = (right_transformed != 0)[:,0,:,:]
+        mono_mask = (mono_out > 0.5) & (mono_out < 3.0)
+        mask = mask & mono_mask
         nan_mask = ((torch.isnan(right_transformed)-1)/255)[:,0,:,:]
         mask = mask & nan_mask
         target = torch.squeeze(target,1)
         # loss = F.l1_loss(right_transformed[mask], target[mask])
-        loss = F.l1_loss(stereo_out[mask], target[mask])
+        # loss = F.l1_loss(stereo_out[mask], mono_out[mask])
+        loss = F.l1_loss(stereo_out, mono_out)
         total_loss += loss
         # loss = F.mse_loss(stereo_out, target)
         loss.backward()
@@ -215,14 +233,38 @@ def train(epoch):
     if show_images:
         plt.subplot(231)
         plt.imshow(left[0].permute(1, 2, 0).cpu())
+        plt.title("Left Image")
         plt.subplot(232)
+        # plt.show()
         plt.imshow(right[0].permute(1, 2, 0).cpu())
+        plt.title("Right Image")
         plt.subplot(233)
+        # plt.show()
         plt.imshow(right_transformed[0].detach().permute(1, 2, 0).cpu())
+        plt.title("Right Transformed Image")
         plt.subplot(234)
+        # plt.show()
         plt.imshow(stereo_out[0].detach().cpu())
+        plt.title("Stereo Depth Map")
         plt.subplot(235)
+        # plt.show()
+        plt.imshow(mono_out[0].detach().cpu())
+        plt.title("Monocular Depth Map")
+        plt.subplot(236)
+        # plt.show()
         plt.imshow(target[0].cpu())
+        plt.title("GT Depth Map")
+        # plt.show()
+        # plt.subplot(236)
+        # plt.imshow(stereo_out_right[0].detach().cpu())
+        # plt.title("Right Stereo Depth Map")
+        # # plt.subplot(235)
+        # plt.show()
+        # plt.imshow(right_mono_out[0].detach().cpu())
+        # plt.title("Right Monocular Depth Map")
+        # plt.show()
+        # plt.imshow(fuse_depth[0].detach().cpu())
+        # plt.title("Fuse Depth Map")
         plt.show()
     return total_loss / show_every_n_steps
 
@@ -238,29 +280,36 @@ def test():
         test_loss = 0
         for left, right, target in test_loader:
             left, right, target = left.to(device), right.to(device), target.to(device)
-            stereo_out,theta, right_transformed = model(left, right)
+            stereo_out,theta, right_transformed, stereo_out_right = model(left, right)
             with torch.no_grad():
-                mono_out, _ = dfd_net(left)
+                mono_out, _ = dfd_net(left, focal_point=1.5)
             # sum up batch loss
             mask = (right_transformed != 0)[:, 0, :, :]
+            mono_mask = (mono_out > 0.5) & (mono_out < 3.0)
+            mask = mask & mono_mask
             nan_mask = ((torch.isnan(right_transformed) - 1) / 255)[:, 0, :, :]
             mask = mask & nan_mask
             target = torch.squeeze(target, 1)
-            test_loss += F.l1_loss(stereo_out[mask], target[mask], size_average=True).item()
+            # test_loss += F.l1_loss(stereo_out[mask], mono_out[mask], size_average=True).item()
+            test_loss += F.l1_loss(stereo_out, mono_out, size_average=True).item()
 
         test_loss /= len(test_loader.dataset)
         print('\nTest set: Average loss: {:.4f}\n'
               .format(test_loss))
         print(theta)
         if theta[0,0,0] >= 0 and theta[0,0,0] <= 1:
-            print (math.degrees(math.acos(theta[0,0,0])))
+            theta_angle = math.degrees(math.asin(theta[0,1,0]))
+            print (theta_angle)
+        tx = theta[0,0,2] * 128
+        ty = theta[0,1,2] * 128
+        return theta_angle, tx, ty, test_loss
 
 
 def get_error_for_angle():
     model.eval()
     test_loss_masked = list()
     test_loss = list()
-    max_angle = 40
+    max_angle = 30
     step = 0.2
     angles = np.arange(0,max_angle+1, step)
     num_of_test_images_per_angle = 10
@@ -273,10 +322,26 @@ def get_error_for_angle():
                 left, right, target = torch.unsqueeze(torch.Tensor(left),0), torch.unsqueeze(torch.Tensor(right),0), torch.Tensor(target)
                 left, right, target = left.to(device), right.to(device), target.to(device)
                 stereo_out,theta, right_transformed = model(left, right)
+                with torch.no_grad():
+                    mono_out, _ = dfd_net(left, focal_point=1.5)
+                # sum up batch loss
                 mask = (right_transformed != 0)[:, 0, :, :]
+                mono_mask = (mono_out > 0.5) & (mono_out < 3.0)
+                mask = mask & mono_mask
+                # plt.subplot(231)
+                # plt.imshow(left[0].permute(1,2,0).cpu())
+                # plt.subplot(232)
+                # plt.imshow(right[0].permute(1, 2, 0).cpu())
+                # plt.subplot(234)
+                # plt.imshow(target[0].cpu())
+                # plt.subplot(235)
+                # plt.imshow(stereo_out[0].cpu())
+                # plt.subplot(236)
+                # plt.imshow(mono_out[0].cpu())
                 target = torch.squeeze(target, 1)
-                angle_masked_test_loss += F.mse_loss(stereo_out[mask], target[mask], size_average=True).item() / num_of_test_images_per_angle
-                angle_test_loss += F.mse_loss(stereo_out, target, size_average=True).item() / num_of_test_images_per_angle
+                angle_masked_test_loss += F.mse_loss(stereo_out[mask], mono_out[mask], size_average=True).item() / num_of_test_images_per_angle
+                angle_test_loss += F.mse_loss(stereo_out, mono_out, size_average=True).item() / num_of_test_images_per_angle
+                # plt.show()
             test_loss_masked.append(angle_masked_test_loss)
             test_loss.append(angle_test_loss)
             print('Test Loss Masked for angle ' + str(angle) + ': ' + str(test_loss_masked[-1]))
@@ -410,55 +475,74 @@ torch.backends.cudnn.benchmark = True
 # torch.backends.cudnn.deterministic = True
 
 # get_error_for_angle()
-angle_loss = list()
+angle_losses = list()
+tx_losses = list()
+ty_losses = list()
+angles = list()
+tx = list()
+ty = list()
+
 init_lr = lr
-for i in range(7,8):
+losses = list()
+total_steps = 1000
+for db_len in range(25,26):
     # angle = i
     # print ("Running with angle: ", str(angle))
-    # train_loader = torch.utils.data.DataLoader(
-    #     myImageloader(left_img_files=left_train_filelist, right_img_files=right_train_filelist,
-    #                   label_files=train_labels,
-    #                   angle=angle,
-    #                   x_translation=x_translation,
-    #                   y_translation=y_translation,
-    #                   scale=scale,
-    #                   train_patch_w=256,
-    #                   transform=transforms.Compose(
-    #                       [transforms.ToTensor()]),
-    #                   label_transform=transforms.Compose(
-    #                       [transforms.ToTensor()])),
-    #     batch_size=1,
-    #     shuffle=True,
-    #     num_workers=4)
-    # test_db = myImageloader(left_img_files=left_test_filelist, right_img_files=right_test_filelist,
-    #                         label_files=test_labels,
-    #                         angle=angle,
-    #                         x_translation=x_translation,
-    #                         y_translation=y_translation,
-    #                         scale=scale,
-    #                         train_patch_w=256,
-    #                         transform=transforms.Compose(
-    #                             [transforms.ToTensor()]),
-    #                         label_transform=transforms.Compose(
-    #                             [transforms.ToTensor()]),
-    #                         train=False)
-    # test_loader = torch.utils.data.DataLoader(test_db,
-    #                                           batch_size=1,
-    #                                           shuffle=True,
-    #                                           num_workers=4)
-    # model = ConfigNet(stereo_model=stereo_model, stn_mode='rotation_translation').to(device)
-    # optimizer = optim.SGD(model.parameters(), lr=init_lr)
-    # lr = init_lr
-    for epoch in range(1, 1 + 10):
+    num_of_epochs = total_steps / db_len
+    model = ConfigNet(stereo_model=stereo_model, stn_mode='projective').to(device)
+    optimizer = optim.SGD(model.parameters(), lr=lr)
+    print ("Running with db with size: {}, num of epochs: {}".format(str(db_len), str(num_of_epochs)))
+
+    train_loader = torch.utils.data.DataLoader(
+        myImageloader(left_img_files=left_train_filelist, right_img_files=right_train_filelist,
+                      label_files=train_labels,
+                      angle=angle,
+                      x_translation=x_translation,
+                      y_translation=y_translation,
+                      x_perspective=x_perspective,
+                      y_perspective=y_perspective,
+                      scale=scale,
+                      train_patch_w=patch_size,
+                      transform=transforms.Compose(
+                          [transforms.ToTensor()]),
+                      label_transform=transforms.Compose(
+                          [transforms.ToTensor()]), db_len=db_len),
+        batch_size=1,
+        shuffle=True,
+        num_workers=4)
+
+    for epoch in range(1, num_of_epochs + 1):
         loss = train(epoch)
         # if loss < 0.7:
         #     lr = lr * 0.5
         #     optimizer = optim.SGD(model.parameters(), lr=lr)
-        test()
-    angle_loss.append(loss)
+        # prev_loss = loss
+        theta_angle, theta_tx,theta_ty, test_loss = test()
 
-print (angle_loss)
-plt.plot(angle_loss)
+    losses.append(test_loss)
+
+    # angle_loss.append(loss)
+#     angle_losses.append(np.abs(theta_angle - angle))
+#     tx_losses.append(np.abs(theta_tx.cpu() - x_translation))
+#     ty_losses.append(np.abs(theta_ty.cpu() - y_translation))
+#     angles.append(angle)
+#     tx.append(x_translation)
+#     ty.append(y_translation)
+#
+# print (angles, angle_losses)
+# print (tx_losses)
+# print (ty_losses)
+# plt.plot(angles, angle_losses, label="angle losses")
+# plt.plot(angles, tx_losses, label="tx losses")
+# plt.plot(angles, ty_losses, label="ty_losses")
+# plt.legend()
+
+# print (angle_loss)
+# plt.plot(angle_loss)
+print (losses)
+with open('loss_for_image_db.pickle', 'wb') as f:
+    pickle.dump(losses, f)
+plt.plot(np.arange(1,50), losses)
 
 # Visualize the STN transformation on some input batch
 visualize_stn()
